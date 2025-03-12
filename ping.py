@@ -6,7 +6,7 @@ class PingServer(Application):
     def __init__(self, node):
         Application.__init__(self, node)
         self.logFile = 'pingserver.log'
-        self.prefix = f'/{node.name}'
+        self.prefix = f'/minindn/{node.name}/32=DV'
 
     def start(self):
         Application.start(self, ['ndnpingserver', self.prefix], logfile=self.logFile)
@@ -19,5 +19,6 @@ class Ping(Application):
         self.logFile = f'ping-{logname}.log'
         self.prefix = pfx
 
+    # hardcode nodejs path
     def start(self):
-        Application.start(self, ['node', '/work/dist/ping.js', self.prefix], logfile=self.logFile)
+        Application.start(self, ['node', '/mini-ndn/eval-ndn-dv/dist/ping.js', self.prefix], logfile=self.logFile)

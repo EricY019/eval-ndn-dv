@@ -14,15 +14,17 @@ from minindn.apps.nlsr import Nlsr
 from mininet.link import Link
 from mininet.node import Node
 
-from minindn_play.server import PlayServer
+# from minindn_play.server import PlayServer
 
-from dv import DV
+# from dv import DV
+from dv_ndnd import NDNd_DV
+from fw_ndnd import NDNd_FW
 from ping import PingServer, Ping
 
 TMP_DIR = '/work/tmp'
 SEED = 0
 
-NUM_PINGSS = 80
+NUM_PINGSS = 40 # each node runs a ping sever, number of clients trying to ping, i.e, number of flows
 
 SCEN_MAX_SEC = 300
 SCEN_INTERVAL = 1
@@ -101,36 +103,38 @@ def start():
 
     Minindn.cleanUp()
     Minindn.verifyDependencies()
-
     ndn = Minindn()
 
     ndn.start()
 
     if not DRY:
         info('Starting NFD on nodes\n')
-        nfds = AppManager(ndn, ndn.net.hosts, Nfd)
-        time.sleep(10)
+        # nfds = AppManager(ndn, ndn.net.hosts, Nfd)
+        nfds = AppManager(ndn, ndn.net.hosts, NDNd_FW)
+        time.sleep(1)
 
         info('Starting PingServer on nodes\n')
         ping_servers = AppManager(ndn, ndn.net.hosts, PingServer)
 
         if PROTO == 'dv':
             info('Starting DV on nodes\n')
-            dvs = AppManager(ndn, ndn.net.hosts, DV)
+            # dvs = AppManager(ndn, ndn.net.hosts, DV)
+            dvs = AppManager(ndn, ndn.net.hosts, NDNd_DV)
         elif PROTO == 'ls':
             info('Starting NLSR on nodes\n')
             nlsrs = AppManager(ndn, ndn.net.hosts, Nlsr)
         else:
             raise ValueError('Invalid PROTO')
 
-        if DEBUG:
-            PlayServer(ndn.net).start()
-            ndn.stop()
-            exit(0)
+        # commented playserver for debug purposes
+        # if DEBUG:
+        #    PlayServer(ndn.net).start()
+        #    ndn.stop()
+        #    exit(0)
 
         # more time for router to converge
         info('Waiting for router to converge\n')
-        time.sleep(60)
+        time.sleep(5)
 
     # calculate scenario variables
     info('Starting Ping on nodes\n')
@@ -145,7 +149,7 @@ def start():
     pingss = []
     while len(flows) < NUM_PINGSS:
         source = random.choice(all_hosts)
-        target = random.choice(all_hosts)
+        target = random.choice(all_hosts) # random server
 
         if source == target:
             continue
@@ -158,7 +162,7 @@ def start():
         print('Setting up flow:', flow)
 
         if not DRY:
-            pingss.append(AppManager(ndn, [source], Ping, pfx=f'/{target.name}/ping', logname=target.name))
+            pingss.append(AppManager(ndn, [source], Ping, pfx=f'/minindn/{target.name}/32=DV/ping', logname=target.name))
 
     # scenario start
     if not DRY:
@@ -202,16 +206,18 @@ def start():
 
     # save stats to results json file
     fail, success, total, fail_pc = getStats(all_hosts)
-    with open(f'/work/results/{PROTO}_{NAME_PFX}_{MTTF}_{MTTR}.json', 'w') as f:
+    with open(f'./results/{PROTO}_{NAME_PFX}_{MTTF}_{MTTR}.json', 'w+') as f:
         json.dump({'fail': fail, 'success': success, 'total': total, 'fail_pc': fail_pc}, f)
 
 if __name__ == '__main__':
-    MTTR = 120
+    MTTR = 120 # mean time for links recovery
+    MTTF = 300 # mean time to links failure in seconds
+    start()
 
-    for run in range(1, 4):
-        NAME_PFX = f'base_{run}'
-        SEED = run - 1
+    # for run in range(1, 4):
+    #     NAME_PFX = f'base_{run}'
+    #     SEED = run - 1
 
-        for mttf in [4000, 3000, 2000, 1500, 1000, 500, 300]:
-            MTTF = mttf
-            start()
+    #     for mttf in [4000, 3000, 2000, 1500, 1000, 500, 300]:
+    #        MTTF = mttf
+    #        start()
