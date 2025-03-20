@@ -1,1 +1,1 @@
-{"fail": 355239, "success": 879582, "total": 1234821, "fail_pc": 28.77}
+{"fail": 292827, "success": 949185, "total": 1242012, "fail_pc": 23.58, "loop": 2341, "loop_pc": 0.19}

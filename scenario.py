@@ -24,9 +24,10 @@ from ping import PingServer, Ping
 TMP_DIR = '/work/tmp'
 SEED = 0
 
-NUM_PINGSS = 40 # each node runs a ping sever, number of clients trying to ping, i.e, number of flows
+# Changes here: Change the number of pings
+NUM_PINGSS = 80 # number of flows
 
-SCEN_MAX_SEC = 300
+SCEN_MAX_SEC = 300 # # of minutes
 SCEN_INTERVAL = 1
 
 NAME_PFX = 'what'
@@ -36,7 +37,7 @@ PROTO = 'dv'
 
 DEBUG = False
 
-DRY = False
+DRY = True # True - loss caused by network partitions
 
 def chooseRandN(n, lst, seed):
     random.seed(seed)
@@ -53,11 +54,14 @@ def setLinkParams(link: Link, **params):
 
 def getStats(nodes: list[Node]):
     fail, success = 0, 0
+    loop = 0
+    # iterate through all nodes
     for source in nodes:
-        # list files starting with ping-
         folder = f'/tmp/minindn/{source.name}/log'
         if not os.path.exists(folder):
             continue
+
+        # list files starting with ping-
         basenames = os.listdir(folder)
         basenames = [f for f in basenames if f.startswith('ping-')]
 
@@ -70,14 +74,28 @@ def getStats(nodes: list[Node]):
                             fail += 1
                         elif char == '.':
                             success += 1
+
+        # list files starting with yanfd
+        basenames = os.listdir(folder)
+        basenames = [f for f in basenames if f.startswith('yanfd')]
+
+        for basename in basenames:
+            filename = f'{folder}/{basename}'
+            with open(filename, 'r') as f:
+                for line in f:
+                    if 'Interest is looping (DNL)"' in line:
+                        loop += 1
+
     total = fail + success
     fail_pc = round((fail * 100) / ((fail + success) or 1), 2)
-    return fail, success, total, fail_pc
+    loop_pc = round((loop * 100) / ((fail + success) or 1), 2)
+    return fail, success, total, fail_pc, loop, loop_pc
 
 def printStats(nodes: list[Node]):
-    fail, success, total, fail_pc = getStats(nodes)
+    fail, success, total, fail_pc, loop, loop_pc = getStats(nodes)
     print(f'TOTAL: {total}\t'
-          f'LOSS: {fail_pc}%')
+          f'LOSS: {fail_pc}%\t'
+          f'LOOP: {loop_pc}%')
 
 def flow_works(source: Node, target: Node, visited: set[str]) -> bool:
     if source == target:
@@ -109,12 +127,9 @@ def start():
 
     if not DRY:
         info('Starting NFD on nodes\n')
-        # nfds = AppManager(ndn, ndn.net.hosts, Nfd)
+
         nfds = AppManager(ndn, ndn.net.hosts, NDNd_FW)
         time.sleep(1)
-
-        info('Starting PingServer on nodes\n')
-        ping_servers = AppManager(ndn, ndn.net.hosts, PingServer)
 
         if PROTO == 'dv':
             info('Starting DV on nodes\n')
@@ -135,6 +150,10 @@ def start():
         # more time for router to converge
         info('Waiting for router to converge\n')
         time.sleep(5)
+
+        # Change the ping server to start after starting the DV router, previously it was started before
+        info('Starting PingServer on nodes\n')
+        ping_servers = AppManager(ndn, ndn.net.hosts, PingServer)
 
     # calculate scenario variables
     info('Starting Ping on nodes\n')
@@ -161,6 +180,7 @@ def start():
 
         print('Setting up flow:', flow)
 
+        # Changes here: Change the prefix to /minindn/{target.name}/32=DV/ping
         if not DRY:
             pingss.append(AppManager(ndn, [source], Ping, pfx=f'/minindn/{target.name}/32=DV/ping', logname=target.name))
 
@@ -205,19 +225,18 @@ def start():
     printStats(all_hosts)
 
     # save stats to results json file
-    fail, success, total, fail_pc = getStats(all_hosts)
+    fail, success, total, fail_pc, loop, loop_pc = getStats(all_hosts)
     with open(f'./results/{PROTO}_{NAME_PFX}_{MTTF}_{MTTR}.json', 'w+') as f:
-        json.dump({'fail': fail, 'success': success, 'total': total, 'fail_pc': fail_pc}, f)
+        json.dump({'fail': fail, 'success': success, 'total': total, 'fail_pc': fail_pc, 'loop': loop, 'loop_pc': loop_pc}, f)
 
 if __name__ == '__main__':
-    MTTR = 120 # mean time for links recovery
-    MTTF = 300 # mean time to links failure in seconds
-    start()
+    # Changes here: MTTR (mean time for links recovery) and MTTF (mean time to links failure)
+    MTTR = 120
 
-    # for run in range(1, 4):
-    #     NAME_PFX = f'base_{run}'
-    #     SEED = run - 1
+    for run in range(3): # multiple runs
+        NAME_PFX = f'baseT_{run}'
+        SEED = run + 1
 
-    #     for mttf in [4000, 3000, 2000, 1500, 1000, 500, 300]:
-    #        MTTF = mttf
-    #        start()
+        for mttf in [4000, 3000, 2000, 1500, 1000, 500, 300]:
+           MTTF = mttf
+           start()

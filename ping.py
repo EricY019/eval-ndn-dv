@@ -9,7 +9,8 @@ class PingServer(Application):
         self.prefix = f'/minindn/{node.name}/32=DV'
 
     def start(self):
-        Application.start(self, ['ndnpingserver', self.prefix], logfile=self.logFile)
+        # Application.start(self, ['ndnpingserver', self.prefix], logfile=self.logFile)
+        Application.start(self, ['ndnd', 'pingserver', '--expose', self.prefix], logfile=self.logFile)
 
 class Ping(Application):
     prefix: str
